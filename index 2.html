@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>حاسبة بطولة ببجي</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14171c;--mu:#6a7380;--bd:#dde1e7;--ac:#e8890c;--ac2:#fff;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#101216;--card:#1a1d23;--tx:#eceff3;--mu:#98a1ae;--bd:#2c313a;--ac:#f2a037;--ac2:#1a1200;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:"Segoe UI",Tahoma,Arial,sans-serif;line-height:1.5}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:.2em 0 .6em}h2{font-size:1.05rem;margin:0 0 .6em}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+button{background:var(--ac);color:var(--ac2);border:0;border-radius:8px;padding:9px 14px;font:inherit;font-weight:600;cursor:pointer}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+button:disabled{opacity:.5}
+input,select{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;font:inherit}
+td input{width:100%}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sc{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:480px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--bd);text-align:center;white-space:nowrap}
+th{color:var(--mu);font-weight:600;font-size:.85rem}
+td.n{text-align:right}
+.tag,.mu{color:var(--mu);font-size:.9rem}
+.tot{font-weight:700;color:var(--ac)}
+.chip{display:inline-block;margin:3px 0 3px 6px;padding:3px 10px;border:1px solid var(--bd);border-radius:999px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js';document.head.appendChild(s)"></script>
+</head>
+<body>
+<main>
+<h1>🏆 حاسبة بطولة ببجي</h1>
+
+<div class="card">
+  <h2>التيمات المشاركة</h2>
+  <div class="row">
+    <input id="tn" type="text" placeholder="اسم التيم كامل" style="flex:2;min-width:160px">
+    <input id="tt" type="text" placeholder="التاج" style="flex:1;min-width:80px">
+    <button id="ta">إضافة</button>
+  </div>
+  <div id="tl" class="mu" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <h2>ارفع صور الجيم</h2>
+  <div class="row">
+    <input id="f" type="file" accept="image/*" multiple>
+    <select id="lg"><option value="eng">إنجليزي</option><option value="eng+ara">إنجليزي + عربي</option></select>
+    <label>لاعبين التيم: <input id="sq" type="number" value="4" min="1" max="6" style="width:60px"></label>
+    <label>حساسية: <input id="th" type="number" value="110" min="40" max="220" style="width:70px"></label>
+    <button id="go">اقرا الصور</button>
+    <button id="man" class="g">جيم يدوي</button>
+  </div>
+  <p class="mu" id="st">اختار كل صور الجيم الواحد مع بعض (أي عدد). أول قراءة محتاجة إنترنت عشان تنزّل بيانات اللغة، وبعدها بتشتغل أسرع. التيم بيتعرف من اللاحقة المشتركة في أسماء لاعبيه (التاج)، والكيلات بتتجمع من لاعبين التيم. لازم تراجع المراكز والكيلات قبل الاعتماد.</p>
+  <div id="pend"></div>
+</div>
+
+<div class="card">
+  <h2>نظام النقط</h2>
+  <div class="row">
+    <label>نقط كل كيل: <input id="kp" type="number" value="1" min="0" step="0.5" style="width:80px"></label>
+    <span class="mu">المراكز: 1=10 · 2=6 · 3=5 · 4=4 · 5=3 · 6=2 · 7-8=1 · غير كده=0</span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between"><h2>الترتيب العام</h2><button class="g" id="rs">مسح البطولة</button></div>
+  <div class="sc"><table id="tb"></table></div>
+  <div id="gl" class="mu" style="margin-top:10px"></div>
+</div>
+</main>
+
+<script>
+const PP={1:10,2:6,3:5,4:4,5:3,6:2,7:1,8:1},pts=p=>PP[p]||0;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const key=s=>String(s||"").toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]/g,"");
+function lev(a,b){const m=[];for(let i=0;i<=a.length;i++){m[i]=[i];}for(let j=1;j<=b.length;j++)m[0][j]=j;
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)m[i][j]=Math.min(m[i-1][j]+1,m[i][j-1]+1,m[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return m[a.length][b.length]}
+const sim=(a,b)=>{a=key(a);b=key(b);return a&&b?1-lev(a,b)/Math.max(a.length,b.length):0};
+const load=k=>{try{return JSON.parse(localStorage.getItem(k)||"[]")}catch(e){return[]}};
+const put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let games=load("pubg_games"),teams=load("pubg_teams"),pending=[];
+
+const exact=r=>teams.find(t=>key(t.name)===key(r.team)||(t.tag&&(key(t.tag)===key(r.tag)||key(t.tag)===key(r.team))))||null;
+
+function render(){
+  const kp=parseFloat($("kp").value)||0,m={};
+  teams.forEach(t=>{m[key(t.name)]={team:t.name,tag:t.tag||"",g:0,k:0,p:0,w:0}});
+  games.forEach(g=>g.rows.forEach(r=>{
+    const rt=exact(r),k=rt?key(rt.name):key(r.team);if(!k)return;
+    const t=m[k]||(m[k]={team:rt?rt.name:r.team,tag:rt?(rt.tag||""):(r.tag||""),g:0,k:0,p:0,w:0});
+    t.g++;t.k+=+r.kills||0;t.p+=pts(+r.place);if(+r.place===1)t.w++;if(!t.tag&&r.tag)t.tag=r.tag;
+  }));
+  const L=Object.values(m).map(t=>({...t,tot:t.p+t.k*kp})).sort((a,b)=>b.tot-a.tot||b.w-a.w||b.k-a.k);
+  $("tb").innerHTML="<tr><th>#</th><th>التيم</th><th>ماتشات</th><th>نقط المراكز</th><th>كيلات</th><th>Top1</th><th>الإجمالي</th></tr>"+
+    (L.length?L.map((t,i)=>`<tr><td>${i+1}</td><td class="n">${esc(t.team)} ${t.tag?`<span class="tag">[${esc(t.tag)}]</span>`:""}</td><td>${t.g}</td><td>${t.p}</td><td>${t.k}</td><td>${t.w}</td><td class="tot">${+t.tot.toFixed(2)}</td></tr>`).join(""):`<tr><td colspan="7" class="mu">لسه مفيش ماتشات</td></tr>`);
+  $("gl").innerHTML=games.length?"الماتشات: "+games.map((g,i)=>`<span>${esc(g.label)} <a href="#" data-d="${i}">حذف</a></span>`).join(" · "):"";
+  $("gl").querySelectorAll("[data-d]").forEach(a=>a.onclick=e=>{e.preventDefault();games.splice(+a.dataset.d,1);put("pubg_games",games);render()});
+}
+
+function renderTeams(){
+  $("tl").innerHTML=teams.length?teams.map((t,i)=>`<span class="chip">${esc(t.name)}${t.tag?` <span class="tag">[${esc(t.tag)}]</span>`:""} <a href="#" data-t="${i}">✕</a></span>`).join(""):"لسه مضفتش تيمات.";
+  $("tl").querySelectorAll("[data-t]").forEach(a=>a.onclick=e=>{e.preventDefault();teams.splice(+a.dataset.t,1);put("pubg_teams",teams);renderTeams();render()});
+}
+$("ta").onclick=()=>{const n=$("tn").value.trim(),t=$("tt").value.trim();if(!n)return;teams.push({name:n,tag:t});put("pubg_teams",teams);$("tn").value="";$("tt").value="";renderTeams();render()};
+
+function renderPend(){
+  $("pend").innerHTML=pending.map((p,pi)=>`<div class="card" style="margin-top:10px"><b>${esc(p.label)}</b>
+  <div class="sc"><table><tr><th>المركز</th><th>التيم</th><th>التاج</th><th>كيلات</th><th></th></tr>
+  ${p.rows.map((r,ri)=>`<tr><td><input type="number" data-p="${pi}" data-r="${ri}" data-f="place" value="${r.place||""}" style="width:70px"></td>
+  <td><input type="text" data-p="${pi}" data-r="${ri}" data-f="team" value="${esc(r.team)}"></td>
+  <td><input type="text" data-p="${pi}" data-r="${ri}" data-f="tag" value="${esc(r.tag||"")}" style="width:90px"></td>
+  <td><input type="number" data-p="${pi}" data-r="${ri}" data-f="kills" value="${r.kills}" style="width:70px"></td>
+  <td><a href="#" data-x="${pi}.${ri}">✕</a></td></tr>`).join("")}</table></div>
+  <div class="row" style="margin-top:8px"><button data-ok="${pi}">اعتمد الجيم</button><button class="g" data-add="${pi}">+ سطر</button><button class="g" data-no="${pi}">تجاهل</button></div></div>`).join("");
+  $("pend").querySelectorAll("input").forEach(i=>i.oninput=()=>{pending[+i.dataset.p].rows[+i.dataset.r][i.dataset.f]=i.type==="number"?+i.value:i.value});
+  $("pend").querySelectorAll("[data-x]").forEach(a=>a.onclick=e=>{e.preventDefault();const[p,r]=a.dataset.x.split(".");pending[+p].rows.splice(+r,1);renderPend()});
+  $("pend").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{pending[+b.dataset.add].rows.push({place:0,team:"",tag:"",kills:0});renderPend()});
+  $("pend").querySelectorAll("[data-ok]").forEach(b=>b.onclick=()=>{const p=pending.splice(+b.dataset.ok,1)[0];p.rows=p.rows.filter(r=>key(r.team));games.push(p);put("pubg_games",games);renderPend();render()});
+  $("pend").querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>{pending.splice(+b.dataset.no,1);renderPend()});
+}
+
+const numFix=s=>{const m={O:0,o:0,D:0,Q:0,l:1,I:1,"|":1,"!":1,S:5,B:8};let r="";for(const c of s)r+=/\d/.test(c)?c:(c in m?m[c]:"?");return /^\d+$/.test(r)?+r:0};
+function prefixOf(names){
+  const ks=names.map(key).filter(Boolean);if(!ks.length)return"";
+  const need=ks.length>=3?3:2;
+  for(let L=Math.min(10,...ks.map(k=>k.length));L>=2;L--){
+    const c={};ks.forEach(k=>{const p=k.slice(0,L);c[p]=(c[p]||0)+1});
+    const b=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];
+    if(b[1]>=need)return b[0];
+  }
+  return ks[0].slice(0,3);
+}
+function showPrefix(names,pre){
+  const n=names.find(x=>key(x).startsWith(pre))||names[0];
+  return n.replace(/[^A-Za-z0-9\u0600-\u06FF]/g,"").slice(0,pre.length);
+}
+function matchTeam(names,pre){
+  let best=null,bs=0;
+  teams.forEach(t=>{
+    let s=0;const tg=key(t.tag);
+    if(tg.length>=2){let h=0;names.forEach(n=>{const k=key(n);if(k.startsWith(tg)||(tg.length>=3&&sim(k.slice(0,tg.length),tg)>=.67))h++});s=h>=2?.6+h/10:0}
+    if(!s){s=Math.max(sim(pre,t.name),t.tag?sim(pre,t.tag):0)*.9;const nk=key(t.name);if(nk.length>=3&&names.filter(n=>key(n).includes(nk)).length>=2)s=1}
+    if(s>bs){bs=s;best=t}
+  });
+  return bs>=.7?best:null;
+}
+function addImage(words,W,st,sq){
+  const ws=words.filter(w=>w.text&&w.text.trim()).map(w=>({t:w.text.trim(),x:(w.bbox.x0+w.bbox.x1)/2,y:(w.bbox.y0+w.bbox.y1)/2,h:w.bbox.y1-w.bbox.y0}));
+  if(!ws.length)return;
+  const hs=ws.map(w=>w.h).sort((a,b)=>a-b),tol=(hs[hs.length>>1]||20)*.6;
+  const xs=ws.map(w=>w.x).filter(x=>x>W*.35&&x<W*.65).sort((a,b)=>a-b);
+  let cut=0,gap=0;
+  for(let i=1;i<xs.length;i++)if(xs[i]-xs[i-1]>gap){gap=xs[i]-xs[i-1];cut=(xs[i]+xs[i-1])/2}
+  const cols=gap>W*.04?[ws.filter(w=>w.x<cut),ws.filter(w=>w.x>=cut)]:[ws];
+  cols.forEach(col=>{
+    col.sort((a,b)=>a.y-b.y);
+    const an=col.filter(w=>/limin/i.test(w.t));
+    if(!an.length)return;
+    const d=[];for(let i=1;i<an.length;i++)d.push(an[i].y-an[i-1].y);d.sort((a,b)=>a-b);
+    const lim=(d.length?d[d.length>>1]:tol*2)*.6;
+    const rows=an.map(a=>({y:a.y,w:[]}));
+    col.forEach(w=>{let b=0,bd=1e9;rows.forEach((r,i)=>{const dd=Math.abs(w.y-r.y);if(dd<bd){bd=dd;b=i}});if(bd<=lim)rows[b].w.push(w)});
+    const pl=[];
+    rows.forEach(r=>{
+      r.w.sort((a,b)=>a.x-b.x);
+      const m=r.w.map(w=>w.t).join(" ").match(/^(.*?)\s*([0-9OoDQlI|!SB]{1,2})\s*eliminations?/i);
+      if(!m)return;
+      let name=m[1].trim(),rank=0;
+      const rm=name.match(/^(\d{1,2})\s+(.+)$/);
+      if(rm){rank=+rm[1];name=rm[2]}
+      if(name.length>=2)pl.push({name,k:numFix(m[2]),rank});
+    });
+    for(let i=0;i<pl.length;i+=sq){
+      const g=pl.slice(i,i+sq);if(g.length<2)continue;
+      const names=g.map(p=>p.name),pre=prefixOf(names),rt=matchTeam(names,pre);
+      const tag=rt?(rt.tag||""):showPrefix(names,pre),team=rt?rt.name:tag,k=key(team);
+      if(!k||st.seen.has(k))continue;
+      st.seen.add(k);
+      const dr=g.map(p=>p.rank).find(x=>x>0);
+      const rank=(dr&&dr>st.last&&dr<=st.last+3)?dr:st.last+1;
+      st.last=rank;
+      st.out.push({place:rank,team,tag,kills:g.reduce((a,p)=>a+p.k,0)});
+    }
+  });
+}
+
+async function prep(file){
+  const img=await createImageBitmap(file),s=Math.max(1,Math.min(3,2000/img.width));
+  const c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+  const x=c.getContext("2d");x.imageSmoothingQuality="high";x.drawImage(img,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height),p=d.data,th=+$("th").value||110;
+  for(let i=0;i<p.length;i+=4){const v=Math.min(p[i],p[i+1],p[i+2])>th?0:255;p[i]=p[i+1]=p[i+2]=v}
+  x.putImageData(d,0,0);return c;
+}
+
+let cur="";
+$("go").onclick=async()=>{
+  const files=[...$("f").files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  if(!files.length){$("st").textContent="اختار صور الأول.";return}
+  if(!window.Tesseract){$("st").textContent="مكتبة القراءة مش متحملة. اتأكد إن النت شغال، وإن الملف مفتوح في متصفح (Chrome أو Safari) مش من جوه واتساب أو معاينة، وبعدين حدّث الصفحة.";return}
+  $("go").disabled=true;
+  try{
+    cur="بجهّز القراءة";$("st").textContent=cur+"...";
+    const w=await Tesseract.createWorker($("lg").value,1,{logger:m=>{if(m.status==="recognizing text")$("st").textContent=cur+" — "+Math.round(m.progress*100)+"%"}});
+    await w.setParameters({tessedit_pageseg_mode:"11"});
+    const st={seen:new Set(),out:[],last:0},sq=Math.max(1,+$("sq").value||4);
+    for(let i=0;i<files.length;i++){
+      cur=`صورة ${i+1} من ${files.length}`;
+      const c=await prep(files[i]),r=await w.recognize(c);
+      addImage(r.data.words||[],c.width,st,sq);
+    }
+    await w.terminate();
+    pending.push({label:`جيم ${games.length+pending.length+1}`,rows:st.out});
+    $("f").value="";
+    $("st").textContent=st.out.length?"راجع المراكز والكيلات واعتمد الجيم.":"مقدرتش ألاقي نتايج واضحة. جرب تغيّر الحساسية، أو ضيف السطور يدوي.";
+  }catch(e){$("st").textContent="حصلت مشكلة في القراءة: "+((e&&e.message)||"")}
+  $("go").disabled=false;renderPend();
+};
+$("man").onclick=()=>{
+  pending.push({label:`جيم ${games.length+pending.length+1}`,rows:teams.length?teams.map(t=>({place:0,team:t.name,tag:t.tag||"",kills:0})):[{place:0,team:"",tag:"",kills:0}]});
+  renderPend();
+};
+$("kp").oninput=render;
+let rsT=null;
+$("rs").onclick=()=>{
+  if(rsT){clearTimeout(rsT);rsT=null;games=[];put("pubg_games",games);render();$("rs").textContent="مسح البطولة";return}
+  $("rs").textContent="اضغط تاني للتأكيد";
+  rsT=setTimeout(()=>{rsT=null;$("rs").textContent="مسح البطولة"},4000);
+};
+renderTeams();render();
+</script>
+</body>
+</html>
